@@ -53,3 +53,13 @@ def test_concat_with_pauses():
 def test_unsupported_format(tmp_path):
     with pytest.raises(audio.AudioError):
         audio.save_audio(tmp_path / "a.xyz", np.zeros(10, dtype=np.float32), 1000)
+
+
+def test_fade_ramps_edges_and_keeps_length():
+    sr = 1000
+    x = np.ones(200, dtype=np.float32)
+    y = audio.fade(x, sr, fade_s=0.01)
+    assert len(y) == len(x)
+    assert y[0] == 0.0 and y[-1] == 0.0
+    assert y[100] == 1.0
+    assert x[0] == 1.0  # input untouched

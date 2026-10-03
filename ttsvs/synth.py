@@ -36,7 +36,7 @@ class Synthesizer:
     def speak(self, text: str, voice_id: str | None = None,
               progress: Callable[[int, int], None] | None = None,
               **params) -> tuple[int, np.ndarray]:
-        chunks = split_text(text)
+        chunks = split_text(text, self.engine.max_chars)
         if not chunks:
             raise ValueError("There is no text to speak.")
         reference = self.library.get(voice_id).reference_path if voice_id else None

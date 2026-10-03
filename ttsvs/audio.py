@@ -129,8 +129,19 @@ def save_audio(path: str | Path, audio: np.ndarray, sr: int) -> Path:
     raise AudioError(f"Unsupported output format {suffix!r}; use .wav (or .mp3 with ffmpeg).")
 
 
+def fade(audio: np.ndarray, sr: int, fade_s: float = 0.01) -> np.ndarray:
+    """Short linear fade-in and fade-out so chunk edges don't click."""
+    audio = np.array(audio, dtype=np.float32)
+    n = min(int(fade_s * sr), len(audio) // 2)
+    if n > 0:
+        ramp = np.linspace(0.0, 1.0, n, dtype=np.float32)
+        audio[:n] *= ramp
+        audio[-n:] *= ramp[::-1]
+    return audio
+
+
 def concat_with_pauses(chunks: list[np.ndarray], sr: int, pause_s: float = 0.2) -> np.ndarray:
-    """Join chunks with pause_s seconds of silence between them."""
+    """Join chunks with pause_s seconds of silence between them, fading each edge."""
     if not chunks:
         return np.zeros(0, dtype=np.float32)
     gap = np.zeros(int(pause_s * sr), dtype=np.float32)
@@ -138,5 +149,5 @@ def concat_with_pauses(chunks: list[np.ndarray], sr: int, pause_s: float = 0.2) 
     for i, chunk in enumerate(chunks):
         if i:
             parts.append(gap)
-        parts.append(np.asarray(chunk, dtype=np.float32))
+        parts.append(fade(chunk, sr))
     return np.concatenate(parts)

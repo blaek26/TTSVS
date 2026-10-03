@@ -15,6 +15,7 @@ class EngineError(RuntimeError):
 class TTSEngine(ABC):
     name: str
     sample_rate: int
+    max_chars: int = 300  # longest text chunk to send to synthesize() at once
 
     def __init__(self, device: str = "auto"):
         self.device = device
