@@ -21,5 +21,5 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
 }
 
 Write-Host "==> Installing TTSVS and Chatterbox"
-& $venvPy -m pip install -e ".[chatterbox]"
+& $venvPy -m pip install -e ".[chatterbox,book]"
 Write-Host "Done. Check with: .venv\Scripts\ttsvs doctor ; start with scripts\run.bat"

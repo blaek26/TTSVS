@@ -72,10 +72,10 @@ if [ "$FLAVOR" = "rocm" ]; then
   "${PIP[@]}" --no-deps chatterbox-tts
   "${PIP[@]}" -r scripts/requirements-chatterbox-nodeps.txt
   echo "==> Installing TTSVS"
-  "${PIP[@]}" -e .
+  "${PIP[@]}" -e ".[book]"
 else
   echo "==> Installing TTSVS and Chatterbox"
-  "${PIP[@]}" -e ".[chatterbox]"
+  "${PIP[@]}" -e ".[chatterbox,book]"
 fi
 
 echo
