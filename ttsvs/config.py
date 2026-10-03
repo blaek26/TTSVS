@@ -30,6 +30,24 @@ def outputs_dir() -> Path:
     return path
 
 
+def history_dir() -> Path:
+    path = data_dir() / "history"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def books_dir() -> Path:
+    """Default root for rendered audiobooks."""
+    path = data_dir() / "books"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def lexicon_path() -> Path:
+    """Pronunciation dictionary file (created on first save)."""
+    return data_dir() / "lexicon.json"
+
+
 def resolve_device(device: str = "auto") -> str:
     """Map "auto" to the best available device (cuda > mps > cpu)."""
     device = (device or "auto").lower()

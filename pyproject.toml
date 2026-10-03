@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 chatterbox = ["chatterbox-tts", "setuptools<81", "ml_dtypes>=0.5"]
+book = ["pypdf"]
 dev = ["pytest"]
 
 [project.scripts]

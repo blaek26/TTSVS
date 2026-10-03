@@ -151,3 +151,70 @@ def concat_with_pauses(chunks: list[np.ndarray], sr: int, pause_s: float = 0.2) 
             parts.append(gap)
         parts.append(fade(chunk, sr))
     return np.concatenate(parts)
+
+
+def _atempo_chain(rate: float) -> str:
+    """ffmpeg filter string for a tempo change; each atempo factor stays in 0.5-2.0."""
+    factors: list[float] = []
+    while rate > 2.0:
+        factors.append(2.0)
+        rate /= 2.0
+    while rate < 0.5:
+        factors.append(0.5)
+        rate /= 0.5
+    factors.append(rate)
+    return ",".join(f"atempo={f:.6f}" for f in factors)
+
+
+def _time_stretch_librosa(audio: np.ndarray, rate: float) -> np.ndarray | None:
+    """Phase-vocoder stretch via librosa, or None when librosa is unusable."""
+    try:
+        import librosa
+    except Exception:  # not installed, or a broken numba/scipy stack
+        return None
+    try:
+        out = librosa.effects.time_stretch(audio, rate=rate)
+    except Exception:
+        return None
+    return np.ascontiguousarray(out, dtype=np.float32)
+
+
+def _time_stretch_ffmpeg(audio: np.ndarray, sr: int, rate: float) -> np.ndarray:
+    ffmpeg = ffmpeg_path()
+    if ffmpeg is None:
+        raise AudioError(
+            "Changing the speed needs librosa (installed with the Chatterbox "
+            "engine) or ffmpeg. Install ffmpeg, or set speed to 1.0."
+        )
+    proc = subprocess.run(
+        [
+            ffmpeg, "-v", "error",
+            "-f", "f32le", "-ar", str(sr), "-ac", "1", "-i", "-",
+            "-filter:a", _atempo_chain(rate),
+            "-f", "f32le", "-ar", str(sr), "-ac", "1", "-",
+        ],
+        input=np.ascontiguousarray(audio, dtype=np.float32).tobytes(),
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise AudioError(f"ffmpeg could not change the speed: {proc.stderr.decode(errors='replace').strip()}")
+    return np.frombuffer(proc.stdout, dtype=np.float32).copy()
+
+
+def time_stretch(audio: np.ndarray, sr: int, rate: float) -> np.ndarray:
+    """Change speed without changing pitch; rate > 1 is faster.
+
+    Uses librosa when importable, else ffmpeg's atempo filter (chained so each
+    step stays within its 0.5-2.0 range), else raises AudioError. A rate of 1.0
+    returns the input unchanged.
+    """
+    rate = float(rate)
+    if not np.isfinite(rate) or rate <= 0:
+        raise ValueError("Speed must be a positive number.")
+    audio = np.asarray(audio, dtype=np.float32)
+    if rate == 1.0 or audio.size == 0:
+        return audio
+    stretched = _time_stretch_librosa(audio, rate)
+    if stretched is None:
+        stretched = _time_stretch_ffmpeg(audio, sr, rate)
+    return np.clip(stretched, -1.0, 1.0)

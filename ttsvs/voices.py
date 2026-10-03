@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 import unicodedata
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -38,12 +39,25 @@ class Voice:
     created_at: str
     notes: str = ""
     duration_s: float = 0.0
+    consent: bool = False  # user confirmed they may clone this voice
+    defaults: dict = field(default_factory=dict)  # engine param -> value; may include "speed"
 
 
 def slugify(name: str) -> str:
     text = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return slug or "voice"
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _clean_defaults(raw) -> dict[str, float]:
+    """Keep only name -> finite number entries (tolerates hand-edited files)."""
+    if not isinstance(raw, dict):
+        return {}
+    return {k: float(v) for k, v in raw.items() if isinstance(k, str) and _is_number(v)}
 
 
 def check_duration(seconds: float) -> str | None:
@@ -77,8 +91,10 @@ class VoiceLibrary:
                 created_at=data.get("created_at", ""),
                 notes=data.get("notes", ""),
                 duration_s=float(data.get("duration_s", 0.0)),
+                consent=bool(data.get("consent", False)),
+                defaults=_clean_defaults(data.get("defaults")),
             )
-        except (ValueError, KeyError, OSError):
+        except (ValueError, KeyError, OSError, TypeError):
             return None
 
     def _write(self, voice: Voice) -> None:
@@ -112,7 +128,7 @@ class VoiceLibrary:
             raise VoiceNotFoundError(f"Voice {voice_id!r} not found (available: {known}).")
         return voice
 
-    def add(self, name: str, audio_path: Path, notes: str = "") -> Voice:
+    def add(self, name: str, audio_path: Path, notes: str = "", consent: bool = False) -> Voice:
         name = name.strip()
         if not name:
             raise ValueError("Voice name must not be empty.")
@@ -142,6 +158,7 @@ class VoiceLibrary:
                 created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 notes=notes,
                 duration_s=round(len(data) / REFERENCE_SR, 3),
+                consent=bool(consent),
             )
             self._write(voice)
         except Exception:
@@ -163,5 +180,22 @@ class VoiceLibrary:
             if other.id != voice.id and other.name.lower() == new_name.lower():
                 raise VoiceExistsError(f"A voice named {new_name!r} already exists.")
         voice.name = new_name
+        self._write(voice)
+        return voice
+
+    def set_defaults(self, voice_id: str, params: dict) -> Voice:
+        """Save engine settings (and "speed") that load whenever this voice is picked.
+
+        An empty dict clears them. Values must be finite numbers.
+        """
+        if not isinstance(params, dict):
+            raise ValueError("Defaults must be a dict of setting name to number.")
+        for key, value in params.items():
+            if not isinstance(key, str):
+                raise ValueError(f"Setting names must be strings, got {key!r}.")
+            if not _is_number(value):
+                raise ValueError(f"Setting {key!r} must be a number, got {value!r}.")
+        voice = self.get(voice_id)
+        voice.defaults = {k: float(v) for k, v in params.items()}
         self._write(voice)
         return voice
