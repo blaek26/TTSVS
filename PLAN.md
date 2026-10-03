@@ -117,3 +117,112 @@ Voice cloning can be misused. The app will show a short consent reminder when ad
 
 - **Worker 1 (core engine):** `config.py`, `audio.py`, `text.py`, `voices.py`, `engines/*`, `synth.py`, `tests/` for those modules, `pyproject.toml`.
 - **Worker 2 (app layer):** `cli.py`, `ui.py`, `README.md`, `scripts/`, tests for the CLI. Builds against the interfaces above and uses the dummy engine to run without models.
+
+## Phase 2 build (second round)
+
+Phase 1 is confirmed working on Blake's CachyOS + RX 9070 XT. This round adds the three features Blake picked plus extras.
+
+### Features
+1. **History**: every generation is saved automatically (audio + text, voice, settings, time). A History tab lists them newest first with play, download, export to MP3, re-use settings, delete and clear all. CLI: `ttsvs history list|export ID OUT|remove ID|clear`.
+2. **Streaming playback**: audio starts playing after the first chunk while later chunks are still generating (UI toggle, on by default). The full clip is still saved to history at the end.
+3. **Audiobooks**: read a `.txt`, `.md`, `.epub` or `.pdf` file aloud. It is split into chapters and renders one audio file per chapter (WAV or MP3) into a folder. A stopped job resumes where it left off. UI: an Audiobook tab with upload, chapter preview, voice and settings, progress, and a list of finished files. CLI: `ttsvs book FILE --voice NAME -o OUTDIR [--format mp3] [--chapters 1-3]`.
+4. **Extras**:
+   - **Speed control**: a speed slider (0.5x to 2x) that time-stretches the result without changing pitch.
+   - **Pronunciation dictionary**: whole-word replacements applied before synthesis, for example "TTSVS" becomes "T T S V S" or "Nguyen" becomes "Win". Managed in the UI and through `ttsvs lexicon list|set WORD SAY|remove WORD`.
+   - **Per-voice default settings**: save the current sliders as a voice's defaults, which load automatically when that voice is picked.
+   - **Consent stored with the voice**: closes the Phase 1 gap.
+   - **Guided recording**: the Voices tab shows a short paragraph to read aloud while recording with the mic.
+   - **Text input**: load a .txt file into the Speak box, and show a character count with an estimated duration.
+
+### Phase 2 interfaces
+
+```python
+# ttsvs/config.py (additions)
+def history_dir() -> Path: ...      # <data dir>/history
+def books_dir() -> Path: ...        # <data dir>/books (default audiobook output root)
+def lexicon_path() -> Path: ...     # <data dir>/lexicon.json
+
+# ttsvs/audio.py (addition)
+def time_stretch(audio: np.ndarray, sr: int, rate: float) -> np.ndarray: ...
+    # rate > 1 = faster. Pitch preserved. Uses librosa if importable, else ffmpeg
+    # atempo (chained for rates outside 0.5-2), else raises AudioError. rate == 1 returns input.
+
+# ttsvs/voices.py (changes; voice.json without the new keys must still load)
+@dataclass
+class Voice:
+    ...existing fields...
+    consent: bool = False
+    defaults: dict = field(default_factory=dict)   # engine param name -> value, may include "speed"
+class VoiceLibrary:
+    def add(self, name, audio_path, notes="", consent=False) -> Voice: ...
+    def set_defaults(self, voice_id, params: dict) -> Voice: ...
+
+# ttsvs/lexicon.py
+class Lexicon:
+    def __init__(self, path: Path | None = None): ...  # default config.lexicon_path(); missing file = empty
+    def entries(self) -> dict[str, str]: ...           # sorted by word
+    def set(self, word: str, say_as: str) -> None: ...
+    def remove(self, word: str) -> None: ...           # KeyError if missing
+    def apply(self, text: str) -> str: ...              # whole-word, case-insensitive, longest match first
+
+# ttsvs/history.py
+@dataclass
+class HistoryItem:
+    id: str              # sortable, e.g. 20261003-072500-ab12
+    created_at: str      # ISO 8601
+    text: str
+    voice_id: str | None
+    voice_name: str | None
+    engine: str
+    params: dict
+    audio_path: Path     # <history dir>/<id>/audio.wav
+    duration_s: float
+class History:
+    def __init__(self, root: Path | None = None): ...
+    def add(self, sr: int, audio: np.ndarray, text: str, voice_id: str | None,
+            voice_name: str | None, engine: str, params: dict) -> HistoryItem: ...
+    def list(self, limit: int | None = None) -> list[HistoryItem]: ...   # newest first
+    def get(self, item_id: str) -> HistoryItem: ...                      # KeyError if missing
+    def delete(self, item_id: str) -> None: ...
+    def clear(self) -> int: ...                                          # number removed
+    def export(self, item_id: str, out_path: Path) -> Path: ...          # .wav or .mp3
+
+# ttsvs/synth.py (changes)
+class Synthesizer:
+    def __init__(self, engine="chatterbox", device="auto", library=None,
+                 lexicon: Lexicon | None = None, history: History | None = None,
+                 save_history: bool = False): ...
+    # params may include speed (float, default 1.0); it is applied per chunk via
+    # audio.time_stretch and never passed to the engine. Params not given fall back to
+    # the voice's saved defaults, then the engine defaults. The lexicon is applied before splitting.
+    def speak_stream(self, text, voice_id=None, **params) -> Iterator[tuple[int, np.ndarray, int, int]]: ...
+        # yields (sample_rate, chunk_audio, index (1-based), total) for each chunk; chunk_audio
+        # already has fades and a trailing pause except for the last chunk
+    def speak(self, text, voice_id=None, progress=None, **params) -> tuple[int, np.ndarray]: ...
+        # built on speak_stream; when save_history is true, adds the result to history
+    def speak_to_file(...): ...  # unchanged
+    def effective_params(self, voice_id: str | None, params: dict) -> dict: ...  # the merged params, for UI/history
+
+# ttsvs/book.py
+@dataclass
+class Chapter:
+    index: int     # 1-based
+    title: str
+    text: str
+class BookError(Exception): ...
+def load_book(path: Path) -> tuple[str, list[Chapter]]: ...
+    # .txt/.md: split on markdown headings or lines like "Chapter 7" / "CHAPTER VII"; else one chapter
+    # .epub: stdlib zipfile + html.parser following the OPF spine; titles from <h1>/<h2>/<title>
+    # .pdf: pypdf (optional extra "book"); clear BookError if not installed
+    # Empty chapters are dropped.
+def render_book(synth: Synthesizer, chapters: list[Chapter], out_dir: Path, voice_id=None,
+                fmt: str = "wav", resume: bool = True,
+                progress: Callable[[int, int, str], None] | None = None, **params) -> list[Path]: ...
+    # one file per chapter: "<NN> - <safe title>.<fmt>"; resume skips files that already exist
+    # (written to a .part temp name and renamed on completion, so partial files are never skipped)
+    # progress(done_chapters, total_chapters, current_title)
+```
+
+### Work split for the second build
+- **Worker A (core):** `config.py`, `audio.py`, `voices.py`, `lexicon.py`, `history.py`, `book.py`, `synth.py`, `pyproject.toml` (extra `book = ["pypdf"]`), and tests for all of these.
+- **Worker B (app layer):** `cli.py`, `ui.py`, `README.md`, `tests/test_cli.py`, `tests/test_ui.py`.
