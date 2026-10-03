@@ -18,18 +18,31 @@ elif [ -d /opt/rocm ] || (command -v lspci >/dev/null 2>&1 && lspci | grep -iE '
 fi
 echo "==> Detected: $FLAVOR"
 
-# Create venv: prefer uv with Python 3.11 (Arch/CachyOS ship 3.13+, too new for Chatterbox).
+# Create venv with Python 3.10-3.12. Chatterbox's dependency pins break on 3.13+ (Arch/CachyOS
+# ship 3.14), so prefer uv, which downloads a private Python 3.11 without touching the system.
+venv_ok() {
+  [ -x .venv/bin/python ] && .venv/bin/python -c 'import sys; sys.exit(0 if (3,10) <= sys.version_info[:2] <= (3,12) else 1)'
+}
+if [ -d .venv ] && ! venv_ok; then
+  echo "==> Existing .venv uses an unsupported Python; recreating it"
+  rm -rf .venv
+fi
+
 if command -v uv >/dev/null 2>&1; then
   [ -d .venv ] || uv venv --python 3.11 .venv
   PIP=(uv pip install --python .venv/bin/python)
 else
   PYBIN=""
-  for p in python3.11 python3.12 python3.10 python3; do
+  for p in python3.11 python3.12 python3.10; do
     if command -v "$p" >/dev/null 2>&1; then PYBIN="$p"; break; fi
   done
-  [ -n "$PYBIN" ] || { echo "No Python found. Install Python 3.10-3.12 (or uv)."; exit 1; }
-  "$PYBIN" -c 'import sys; sys.exit(0 if (3,10) <= sys.version_info[:2] <= (3,12) else 1)' || \
-    echo "WARNING: $PYBIN is not 3.10-3.12; Chatterbox may fail to install. Consider installing uv (https://docs.astral.sh/uv/)."
+  if [ -z "$PYBIN" ]; then
+    echo "Need Python 3.10-3.12, but only a newer Python was found."
+    echo "Install uv (it fetches Python 3.11 for this project only), then re-run this script:"
+    echo "  Arch/CachyOS:  sudo pacman -S uv"
+    echo "  Other:         curl -LsSf https://astral.sh/uv/install.sh | sh"
+    exit 1
+  fi
   [ -d .venv ] || "$PYBIN" -m venv .venv
   .venv/bin/python -m pip install --upgrade pip
   PIP=(.venv/bin/python -m pip install)

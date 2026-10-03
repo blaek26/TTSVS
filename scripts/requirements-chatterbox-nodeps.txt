@@ -13,3 +13,5 @@ pykakasi==2.3.0
 pyloudnorm
 omegaconf
 numpy>=1.24,<2
+# onnx (pulled in by s3tokenizer) needs ml_dtypes.float4_e2m1fn, added in ml_dtypes 0.5.
+ml_dtypes>=0.5
