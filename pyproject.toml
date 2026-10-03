@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ttsvs"
+version = "0.1.0"
+description = "Local text-to-speech with voice cloning from a short sample."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "numpy",
+    "soundfile",
+    "soxr",
+    "platformdirs",
+    "gradio>=4",
+]
+
+[project.optional-dependencies]
+chatterbox = ["chatterbox-tts"]
+dev = ["pytest"]
+
+[project.scripts]
+ttsvs = "ttsvs.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ttsvs*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
