@@ -2,6 +2,7 @@
 # TTSVS installer for macOS / Linux. Creates .venv, installs the right PyTorch build, then TTSVS.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+export PATH="$HOME/.local/bin:$PATH"  # where the uv installer puts uv
 
 ROCM_INDEX="${TTSVS_ROCM_INDEX:-https://download.pytorch.org/whl/rocm6.4}"
 CUDA_INDEX="${TTSVS_CUDA_INDEX:-https://download.pytorch.org/whl/cu126}"
@@ -16,6 +17,7 @@ elif command -v nvidia-smi >/dev/null 2>&1; then
 elif [ -d /opt/rocm ] || (command -v lspci >/dev/null 2>&1 && lspci | grep -iE 'VGA|Display|3D' | grep -qiE 'AMD|ATI|Radeon'); then
   FLAVOR=rocm
 fi
+FLAVOR="${TTSVS_FLAVOR:-$FLAVOR}"  # override: rocm, cuda, mac or cpu
 echo "==> Detected: $FLAVOR"
 
 # Create venv with Python 3.10-3.12. Chatterbox's dependency pins break on 3.13+ (Arch/CachyOS
@@ -26,6 +28,14 @@ venv_ok() {
 if [ -d .venv ] && ! venv_ok; then
   echo "==> Existing .venv uses an unsupported Python; recreating it"
   rm -rf .venv
+fi
+
+# No uv and no Python 3.10-3.12 on the system: fetch uv into ~/.local/bin (no sudo needed).
+if ! command -v uv >/dev/null 2>&1 && ! command -v python3.11 >/dev/null 2>&1 \
+   && ! command -v python3.12 >/dev/null 2>&1 && ! command -v python3.10 >/dev/null 2>&1; then
+  echo "==> Installing uv (fetches a private Python 3.11 for this project)"
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
 fi
 
 if command -v uv >/dev/null 2>&1; then
