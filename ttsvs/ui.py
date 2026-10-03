@@ -1,6 +1,7 @@
 """Local Gradio web UI for TTSVS (bound to 127.0.0.1 only)."""
 from __future__ import annotations
 
+import inspect
 import os
 
 os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
@@ -208,5 +209,8 @@ def launch(port: int = 7860, engine: str = "chatterbox", device: str = "auto") -
     os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
     demo = build_ui(engine, device)
     demo.queue()
-    demo.launch(server_name="127.0.0.1", server_port=port, share=False,
-                show_api=False, inbrowser=False)
+    kwargs = {"server_name": "127.0.0.1", "server_port": port, "share": False,
+              "inbrowser": False}
+    if "show_api" in inspect.signature(demo.launch).parameters:  # removed in gradio 6
+        kwargs["show_api"] = False
+    demo.launch(**kwargs)

@@ -216,6 +216,14 @@ def cmd_doctor(args) -> int:
         try:
             import torch
             print(f"torch:       {torch.__version__}")
+            hip = getattr(torch.version, "hip", None)
+            cuda = getattr(torch.version, "cuda", None)
+            if hip:
+                print(f"ROCm/HIP:    {hip} (AMD GPU build; appears as device 'cuda')")
+            elif cuda:
+                print(f"CUDA:        {cuda}")
+            if torch.cuda.is_available():
+                print(f"GPU:         {torch.cuda.get_device_name(0)}")
         except Exception as e:  # noqa: BLE001
             print(f"torch:       installed but failed to import ({e})")
     else:

@@ -1,0 +1,15 @@
+# Chatterbox dependencies, minus torch/torchaudio. Used for the AMD ROCm path, where a newer
+# torch than chatterbox-tts pins (torch==2.6.0) is needed for RDNA4. Install chatterbox-tts itself
+# with --no-deps, then these:
+librosa==0.11.0
+s3tokenizer
+transformers==5.2.0
+diffusers==0.29.0
+resemble-perth>=1.0.0
+conformer==0.3.2
+safetensors==0.5.3
+spacy-pkuseg
+pykakasi==2.3.0
+pyloudnorm
+omegaconf
+numpy>=1.24,<2

@@ -47,3 +47,21 @@ def resolve_device(device: str = "auto") -> str:
     if mps is not None and mps.is_available():
         return "mps"
     return "cpu"
+
+
+def gpu_backend() -> str:
+    """Diagnostic label: "rocm", "cuda", "mps" or "cpu".
+
+    ROCm builds of PyTorch expose the AMD GPU as a "cuda" device, so
+    resolve_device() returns "cuda" there; this tells the two apart.
+    """
+    try:
+        import torch
+    except ImportError:
+        return "cpu"
+    if torch.cuda.is_available():
+        return "rocm" if getattr(torch.version, "hip", None) else "cuda"
+    mps = getattr(torch.backends, "mps", None)
+    if mps is not None and mps.is_available():
+        return "mps"
+    return "cpu"

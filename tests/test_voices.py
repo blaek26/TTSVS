@@ -71,3 +71,7 @@ def test_persists_across_instances(sample_wav, tmp_path):
 def test_check_duration():
     assert check_duration(2.0) and check_duration(120.0)
     assert check_duration(15.0) is None
+
+
+def test_gpu_backend():
+    assert config.gpu_backend() in {"rocm", "cuda", "mps", "cpu"}
