@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import config
-from ..audio import trim_silence
+from ..audio import shorten_silences, trim_silence
 from .base import EngineError, TTSEngine
 
 INSTALL_HINT = 'The Chatterbox engine is not installed. Run: pip install "ttsvs[chatterbox]"'
@@ -87,4 +87,5 @@ class ChatterboxEngine(TTSEngine):
             wav = wav.detach().cpu().numpy()
         out = np.clip(np.asarray(wav, dtype=np.float32).squeeze(), -1.0, 1.0)
         # Drop the quiet tail the model often leaves after the last word.
-        return trim_silence(out, self.sample_rate, threshold_db=-45.0, pad_s=0.08)
+        out = trim_silence(out, self.sample_rate, threshold_db=-45.0, pad_s=0.08)
+        return shorten_silences(out, self.sample_rate)

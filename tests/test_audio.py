@@ -147,3 +147,12 @@ def test_time_stretch_without_librosa_or_ffmpeg_raises(monkeypatch):
     monkeypatch.setattr(audio, "ffmpeg_path", lambda: None)
     with pytest.raises(audio.AudioError, match="librosa"):
         audio.time_stretch(_tone(0.1), 24000, 1.5)
+
+
+def test_shorten_silences_caps_long_gaps():
+    sr = 1000
+    tone = np.sin(np.arange(500) / 3).astype(np.float32)
+    x = np.concatenate([tone, np.zeros(5000, np.float32), tone])
+    y = audio.shorten_silences(x, sr, max_gap_s=0.5)
+    assert 1400 <= len(y) <= 1600
+    assert len(audio.shorten_silences(tone, sr)) == len(tone)

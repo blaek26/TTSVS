@@ -589,9 +589,10 @@ def build_ui(engine: str = "chatterbox", device: str = "auto") -> gr.Blocks:
                         save_defaults_btn = gr.Button("Save as this voice's defaults", size="sm")
                         defaults_msg = gr.Markdown()
                 stream_cb = gr.Checkbox(
-                    value=be.streaming_supported, interactive=be.streaming_supported,
-                    label="Stream while generating",
-                    info=("Starts playing after the first chunk while the rest is still being made."
+                    value=False, interactive=be.streaming_supported,
+                    label="Stream while generating (experimental)",
+                    info=("Starts playing sooner, but the live player can stall or shift pitch. "
+                          "The saved result below is always clean."
                           if be.streaming_supported else
                           "Live playback needs ffmpeg, which was not found; the full clip appears when done."))
                 gen_btn = gr.Button("Generate", variant="primary")

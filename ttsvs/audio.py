@@ -129,6 +129,30 @@ def save_audio(path: str | Path, audio: np.ndarray, sr: int) -> Path:
     raise AudioError(f"Unsupported output format {suffix!r}; use .wav (or .mp3 with ffmpeg).")
 
 
+def shorten_silences(audio: np.ndarray, sr: int, max_gap_s: float = 0.5,
+                     threshold_db: float = -45.0, frame_s: float = 0.02) -> np.ndarray:
+    """Cap every internal silent stretch at max_gap_s (models sometimes stall mid-clip)."""
+    audio = np.asarray(audio, dtype=np.float32)
+    frame = max(int(frame_s * sr), 1)
+    n = len(audio) // frame
+    peak = float(np.max(np.abs(audio))) if audio.size else 0.0
+    if n == 0 or peak == 0.0:
+        return audio
+    rms = np.sqrt(np.mean(audio[: n * frame].reshape(n, frame) ** 2, axis=1))
+    quiet = rms < peak * 10 ** (threshold_db / 20)
+    keep_frames = max(int(max_gap_s / frame_s), 1)
+    parts, i = [], 0
+    while i < n:
+        j = i
+        while j < n and quiet[j] == quiet[i]:
+            j += 1
+        end = j if (not quiet[i] or j - i <= keep_frames) else i + keep_frames
+        parts.append(audio[i * frame:end * frame])
+        i = j
+    parts.append(audio[n * frame:])
+    return np.concatenate(parts)
+
+
 def fade(audio: np.ndarray, sr: int, fade_s: float = 0.01) -> np.ndarray:
     """Short linear fade-in and fade-out so chunk edges don't click."""
     audio = np.array(audio, dtype=np.float32)

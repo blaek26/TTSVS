@@ -60,7 +60,7 @@ def test_build_ui_constructs():
     assert isinstance(demo, gr.Blocks)
     labels = {getattr(b, "label", None) for b in demo.blocks.values()}
     assert {"Speak", "History", "Audiobook", "Pronunciation", "Voices"} <= labels
-    assert "Stream while generating" in labels
+    assert "Stream while generating (experimental)" in labels
 
 
 def test_build_ui_chatterbox_sliders_are_engine_params_plus_speed():
